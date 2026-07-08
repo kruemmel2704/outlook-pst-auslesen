@@ -1,0 +1,259 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Outlook_PST_auslesen.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+        Width="1200" Height="700"
+        x:Class="Outlook_PST_auslesen.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="PST Archiv Explorer"
+        RequestedThemeVariant="Dark"
+        Background="#0f172a">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Window.Styles>
+        <!-- Modern Button Styles -->
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button:pointerover">
+            <Setter Property="RenderTransform" Value="scale(1.02)"/>
+        </Style>
+        <Style Selector="Button:pressed">
+            <Setter Property="RenderTransform" Value="scale(0.98)"/>
+        </Style>
+
+        <!-- Primary Accent Buttons -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="LinearGradient(0deg, #4f46e5, #6366f1)"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.accent:pointerover">
+            <Setter Property="Background" Value="LinearGradient(0deg, #4338ca, #4f46e5)"/>
+        </Style>
+
+        <!-- Sidebar Header Style -->
+        <Style Selector="TextBlock.section-header">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#94a3b8"/>
+            <Setter Property="Margin" Value="10,5"/>
+        </Style>
+        
+        <!-- Textbox Styles -->
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="BorderBrush" Value="#334155"/>
+            <Setter Property="Background" Value="#1e293b"/>
+            <Setter Property="SelectionBrush" Value="#6366f1"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto, *, Auto">
+        
+        <!-- ================= HEADER BAR ================= -->
+        <Border Grid.Row="0" Background="#1e293b" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="15,10">
+            <Grid ColumnDefinitions="Auto, *, Auto, Auto">
+                <!-- App Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+                    <TextBlock Text="✉️" FontSize="20"/>
+                    <TextBlock Text="PST Archiv Explorer" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <!-- PST Path Display -->
+                <TextBox Grid.Column="1" Margin="20,0" Text="{Binding PstFilePath}" Watermark="Keine PST-Datei geladen" IsReadOnly="True" VerticalAlignment="Center" Background="#0f172a" Foreground="#cbd5e1" BorderThickness="1"/>
+                
+                <!-- Control Buttons -->
+                <Button Grid.Column="2" Content="PST-Datei öffnen" Click="OpenPst_Click" Classes="accent" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button Grid.Column="3" Content="Schließen" Command="{Binding ClosePst}" IsEnabled="{Binding PstFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#374151" Foreground="#f9fafb" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- ================= MAIN LAYOUT ================= -->
+        <Grid Grid.Row="1" ColumnDefinitions="280, Auto, 380, Auto, *">
+            
+            <!-- COLUMN 0: TreeView Folders -->
+            <Border Grid.Column="0" Background="#0f172a" BorderBrush="#1e293b" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto, *">
+                    <TextBlock Grid.Row="0" Text="ORDNERSTRUKTUR" Classes="section-header" Margin="15,15,15,5"/>
+                    <TreeView Grid.Row="1" ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" Background="Transparent">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Subfolders}">
+                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="2">
+                                    <TextBlock Text="📁" FontSize="14" Foreground="#f59e0b"/>
+                                    <TextBlock Text="{Binding DisplayName}" Foreground="#e2e8f0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </Grid>
+            </Border>
+
+            <!-- Column Splitter 1 -->
+            <GridSplitter Grid.Column="1" Background="#1e293b" Width="3" ResizeDirection="Columns"/>
+
+            <!-- COLUMN 2: Message List -->
+            <Border Grid.Column="2" Background="#0f172a" BorderBrush="#1e293b" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto, Auto, *">
+                    <!-- Search Field -->
+                    <TextBox Grid.Row="0" Text="{Binding SearchText}" Watermark="🔍 Suchen..." Margin="15,15,15,8"/>
+                    
+                    <!-- Selection Actions -->
+                    <Border Grid.Row="1" Background="#1e293b" CornerRadius="4" Margin="15,0,15,8" Padding="10,5">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding IsAllSelected}" Content="Alle auswählen" Foreground="#94a3b8"/>
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentFolderMessages.Count, StringFormat='{}{0} E-Mails'}" Foreground="#94a3b8" VerticalAlignment="Center" FontSize="12"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Messages List -->
+                    <ListBox Grid.Row="2" ItemsSource="{Binding CurrentFolderMessages}" SelectedItem="{Binding SelectedMessage}" Background="Transparent" BorderThickness="0" Margin="5,0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MessageViewModel">
+                                <Border BorderBrush="#1e293b" BorderThickness="0,0,0,1" Padding="5,8">
+                                    <Grid ColumnDefinitions="Auto, *">
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <Grid ColumnDefinitions="*, Auto">
+                                                <TextBlock Grid.Column="0" Text="{Binding From}" FontWeight="SemiBold" Foreground="#f1f5f9" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DisplayDate}" FontSize="10" Foreground="#64748b" Margin="10,0,0,0"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="#94a3b8" TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0" Spacing="4" IsVisible="{Binding HasAttachments}">
+                                                <TextBlock Text="📎" FontSize="10" Foreground="#4f46e5"/>
+                                                <TextBlock Text="Anhang" FontSize="10" Foreground="#6366f1"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Column Splitter 2 -->
+            <GridSplitter Grid.Column="3" Background="#1e293b" Width="3" ResizeDirection="Columns"/>
+
+            <!-- COLUMN 4: Message Preview -->
+            <Border Grid.Column="4" Background="#0b0f19" Padding="15">
+                <Grid>
+                    <!-- Placeholder when nothing selected -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding SelectedMessage, Converter={x:Static ObjectConverters.IsNull}}">
+                        <TextBlock Text="✉️" FontSize="48" Foreground="#334155" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Wählen Sie eine E-Mail aus, um die Vorschau anzuzeigen." Foreground="#475569" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Message Detail View -->
+                    <Grid RowDefinitions="Auto, Auto, *, Auto" IsVisible="{Binding SelectedMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        
+                        <!-- 1. Header Card -->
+                        <Border Grid.Row="0" Background="#1e293b" CornerRadius="8" Padding="15" BorderBrush="#334155" BorderThickness="1" Margin="0,0,0,10">
+                            <Grid RowDefinitions="Auto, Auto, Auto, Auto" ColumnDefinitions="*, Auto">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding SelectedMessage.Subject}" FontSize="16" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"/>
+                                <Button Grid.Row="0" Grid.Column="1" Content="Im Browser öffnen 🌐" Command="{Binding OpenInBrowserCommand}" FontSize="11" Margin="10,0,0,0" VerticalAlignment="Top"/>
+                                
+                                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Margin="0,8,0,0" Spacing="5">
+                                    <TextBlock Text="Von:" FontWeight="Bold" Foreground="#94a3b8" Width="50"/>
+                                    <TextBlock Text="{Binding SelectedMessage.From}" Foreground="#cbd5e1" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                
+                                <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="0,4,0,0" Spacing="5">
+                                    <TextBlock Text="An:" FontWeight="Bold" Foreground="#94a3b8" Width="50"/>
+                                    <TextBlock Text="{Binding SelectedMessage.To}" Foreground="#cbd5e1" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" Margin="0,4,0,0" Spacing="5">
+                                    <TextBlock Text="Datum:" FontWeight="Bold" Foreground="#94a3b8" Width="50"/>
+                                    <TextBlock Text="{Binding SelectedMessage.DisplayDate}" Foreground="#cbd5e1"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- 2. Attachments Section (if present) -->
+                        <Border Grid.Row="1" Background="#111827" CornerRadius="6" Padding="10" BorderBrush="#1f2937" BorderThickness="1" Margin="0,0,0,10" IsVisible="{Binding SelectedMessage.HasAttachments}">
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="Dateianhänge:" FontSize="11" FontWeight="Bold" Foreground="#6366f1"/>
+                                <ItemsControl ItemsSource="{Binding SelectedMessage.Attachments}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderThickness="0,0,0,1" BorderBrush="#1f2937" Padding="3,5">
+                                                <Grid ColumnDefinitions="*, Auto">
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                        <TextBlock Text="📎" Foreground="#818cf8"/>
+                                                        <TextBlock Text="{Binding FileName}" Foreground="#cbd5e1" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Size, StringFormat='({0} Bytes)'}" Foreground="#6b7280" FontSize="10" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <!-- Attachment Save Button -->
+                                                    <Button Grid.Column="1" Content="Speichern" Click="SaveAttachment_Click" Tag="{Binding}" FontSize="10" Padding="8,4" Background="#1f2937" Foreground="#818cf8"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 3. Text Body Preview -->
+                        <Border Grid.Row="2" Background="#1e293b" CornerRadius="8" Padding="15" BorderBrush="#334155" BorderThickness="1">
+                            <ScrollViewer>
+                                <TextBox Text="{Binding SelectedMessage.BodyText}"
+                                         IsReadOnly="True" 
+                                         TextWrapping="Wrap" 
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         FontSize="12"
+                                         Foreground="#cbd5e1"
+                                         AcceptsReturn="True"/>
+                            </ScrollViewer>
+                        </Border>
+                        
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ================= FOOTER BAR ================= -->
+        <Border Grid.Row="2" Background="#0f172a" BorderBrush="#1e293b" BorderThickness="0,1,0,0" Padding="15">
+            <Grid RowDefinitions="Auto, Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto, Auto" Margin="0,0,0,10">
+                    <!-- Target Folder picker -->
+                    <TextBlock Grid.Column="0" Text="Export-Ziel:" FontWeight="Bold" Foreground="#cbd5e1" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="1" Text="{Binding ExportFolderPath}" Watermark="Bitte Zielverzeichnis auswählen..." IsReadOnly="True" VerticalAlignment="Center" Background="#1e293b" Margin="0,0,10,0"/>
+                    <Button Grid.Column="2" Content="Durchsuchen..." Click="SelectExportFolder_Click" VerticalAlignment="Center" Background="#374151" Foreground="#f9fafb" Margin="0,0,20,0"/>
+                    
+                    <!-- Format picker -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="15" Margin="0,0,20,0">
+                        <TextBlock Text="Format:" FontWeight="Bold" Foreground="#cbd5e1" VerticalAlignment="Center"/>
+                        <RadioButton Content="EML-Dateien (.eml)" IsChecked="{Binding ExportAsEml}" Foreground="#cbd5e1"/>
+                        <RadioButton Content="Ordner (HTML + Anhänge)" IsChecked="{Binding !ExportAsEml}" Foreground="#cbd5e1"/>
+                    </StackPanel>
+
+                    <!-- Export trigger button -->
+                    <Button Grid.Column="4" Content="Ausgewählte exportieren" Command="{Binding ExportSelectedCommand}" Classes="accent" VerticalAlignment="Center" IsEnabled="{Binding !IsLoading}"/>
+                </Grid>
+                
+                <!-- Progress & Log Area -->
+                <Grid Grid.Row="1" ColumnDefinitions="*, Auto" IsVisible="{Binding PstFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Foreground="#94a3b8" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Progress}" Width="250" Height="10" CornerRadius="5" Margin="15,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsLoading}" Background="#1e293b" Foreground="LinearGradient(0deg, #4f46e5, #8b5cf6)"/>
+                </Grid>
+            </Grid>
+        </Border>
+        
+    </Grid>
+
+</Window>
