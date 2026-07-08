@@ -1,14 +1,15 @@
-name: .NET Build
+name: Build & Release
 
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Build Application
+  release:
+    name: Build and Create Release
     runs-on: ubuntu-latest
 
     steps:
@@ -23,5 +24,50 @@ jobs:
     - name: Restore Dependencies
       run: dotnet restore
 
-    - name: Build Release
-      run: dotnet build --no-restore --configuration Release
+    # Windows Build
+    - name: Publish Windows x64
+      run: |
+        dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -o ./publish/win-x64
+        cd publish/win-x64
+        zip -r ../../PstViewer_Windows_x64.zip .
+        cd ../..
+
+    # Linux Build
+    - name: Publish Linux x64
+      run: |
+        dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -o ./publish/linux-x64
+        cd publish/linux-x64
+        tar -czf ../../PstViewer_Linux_x64.tar.gz .
+        cd ../..
+
+    # macOS Intel Build
+    - name: Publish macOS Intel (x64)
+      run: |
+        dotnet publish -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -o ./publish/osx-x64
+        cd publish/osx-x64
+        zip -r ../../PstViewer_macOS_x64.zip .
+        cd ../..
+
+    # macOS Apple Silicon Build
+    - name: Publish macOS Apple Silicon (ARM64)
+      run: |
+        dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -o ./publish/osx-arm64
+        cd publish/osx-arm64
+        zip -r ../../PstViewer_macOS_ARM64.zip .
+        cd ../..
+
+    # Create Release on GitHub
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: Release v1.0.${{ github.run_number }}
+        draft: false
+        prerelease: false
+        files: |
+          PstViewer_Windows_x64.zip
+          PstViewer_Linux_x64.tar.gz
+          PstViewer_macOS_x64.zip
+          PstViewer_macOS_ARM64.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
