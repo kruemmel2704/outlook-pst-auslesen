@@ -38,11 +38,11 @@
 
         <!-- Primary Accent Buttons -->
         <Style Selector="Button.accent">
-            <Setter Property="Background" Value="LinearGradient(0deg, #4f46e5, #6366f1)"/>
+            <Setter Property="Background" Value="#4f46e5"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.accent:pointerover">
-            <Setter Property="Background" Value="LinearGradient(0deg, #4338ca, #4f46e5)"/>
+            <Setter Property="Background" Value="#4338ca"/>
         </Style>
 
         <!-- Sidebar Header Style -->
@@ -249,7 +249,7 @@
                 <!-- Progress & Log Area -->
                 <Grid Grid.Row="1" ColumnDefinitions="*, Auto" IsVisible="{Binding PstFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Foreground="#94a3b8" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Progress}" Width="250" Height="10" CornerRadius="5" Margin="15,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsLoading}" Background="#1e293b" Foreground="LinearGradient(0deg, #4f46e5, #8b5cf6)"/>
+                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Progress}" Width="250" Height="10" CornerRadius="5" Margin="15,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsLoading}" Background="#1e293b" Foreground="#6366f1"/>
                 </Grid>
             </Grid>
         </Border>
