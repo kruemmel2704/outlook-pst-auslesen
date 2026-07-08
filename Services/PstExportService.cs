@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using MimeKit;
 using XstReader;
 
@@ -11,6 +12,13 @@ public static class PstExportService
 {
     public static async Task ExportMessageAsync(ViewModels.MessageViewModel msgVm, string targetDir, bool exportAsEml)
     {
+        // Falls es ein Kontakt ist, als vCard (.vcf) exportieren
+        if (msgVm.IsContact)
+        {
+            await ExportContactAsVcardAsync(msgVm, targetDir);
+            return;
+        }
+
         var message = msgVm.Message;
         
         // Dateiname sicher machen
@@ -179,6 +187,73 @@ public static class PstExportService
                 }
             }
         }
+    }
+
+    public static async Task ExportContactAsVcardAsync(ViewModels.MessageViewModel msgVm, string targetDir)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("BEGIN:VCARD");
+        sb.AppendLine("VERSION:3.0");
+        
+        // Voller Name
+        string fullName = $"{msgVm.GivenName} {msgVm.Surname}".Trim();
+        if (string.IsNullOrEmpty(fullName)) fullName = msgVm.Subject;
+        sb.AppendLine($"FN:{fullName}");
+        
+        // Strukturierter Name: Nachname;Vorname;Zweitname;Präfix;Suffix
+        sb.AppendLine($"N:{msgVm.Surname};{msgVm.GivenName};{msgVm.MiddleName};{msgVm.DisplayNamePrefix};");
+        
+        // Firma & Abteilung
+        if (!string.IsNullOrEmpty(msgVm.CompanyName))
+        {
+            if (!string.IsNullOrEmpty(msgVm.DepartmentName))
+                sb.AppendLine($"ORG:{msgVm.CompanyName};{msgVm.DepartmentName}");
+            else
+                sb.AppendLine($"ORG:{msgVm.CompanyName}");
+        }
+        
+        // Job-Titel
+        if (!string.IsNullOrEmpty(msgVm.Title))
+        {
+            sb.AppendLine($"TITLE:{msgVm.Title}");
+        }
+        
+        // E-Mails
+        if (!string.IsNullOrEmpty(msgVm.Email1)) sb.AppendLine($"EMAIL;TYPE=PREF,INTERNET:{msgVm.Email1}");
+        if (!string.IsNullOrEmpty(msgVm.Email2)) sb.AppendLine($"EMAIL;TYPE=INTERNET:{msgVm.Email2}");
+        if (!string.IsNullOrEmpty(msgVm.Email3)) sb.AppendLine($"EMAIL;TYPE=INTERNET:{msgVm.Email3}");
+        
+        // Telefonnummern
+        if (!string.IsNullOrEmpty(msgVm.MobilePhone)) sb.AppendLine($"TEL;TYPE=CELL:{msgVm.MobilePhone}");
+        if (!string.IsNullOrEmpty(msgVm.BusinessPhone)) sb.AppendLine($"TEL;TYPE=WORK,VOICE:{msgVm.BusinessPhone}");
+        if (!string.IsNullOrEmpty(msgVm.HomePhone)) sb.AppendLine($"TEL;TYPE=HOME,VOICE:{msgVm.HomePhone}");
+        
+        // Adresse (Geschäftlich): Postfach;Zusatz;Straße;Ort;Region;PLZ;Land
+        if (!string.IsNullOrEmpty(msgVm.WorkStreet) || !string.IsNullOrEmpty(msgVm.WorkCity) || !string.IsNullOrEmpty(msgVm.WorkPostalCode))
+        {
+            sb.AppendLine($"ADR;TYPE=WORK:;;{msgVm.WorkStreet};{msgVm.WorkCity};{msgVm.WorkState};{msgVm.WorkPostalCode};{msgVm.WorkCountry}");
+        }
+        
+        // Notizen (Body Text)
+        var notes = msgVm.Message.Body?.Text;
+        if (!string.IsNullOrEmpty(notes))
+        {
+            string escapedNotes = notes.Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
+            sb.AppendLine($"NOTE:{escapedNotes}");
+        }
+        
+        sb.AppendLine("END:VCARD");
+        
+        string safeName = MakeSafeFilename(fullName);
+        string vcfPath = Path.Combine(targetDir, $"{safeName}.vcf");
+        
+        int counter = 1;
+        while (File.Exists(vcfPath))
+        {
+            vcfPath = Path.Combine(targetDir, $"{safeName}_{counter++}.vcf");
+        }
+        
+        await File.WriteAllTextAsync(vcfPath, sb.ToString(), System.Text.Encoding.UTF8);
     }
 
     private static string MakeSafeFilename(string filename)
