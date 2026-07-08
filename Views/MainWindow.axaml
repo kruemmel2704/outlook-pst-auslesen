@@ -45,6 +45,24 @@
             <Setter Property="Background" Value="#4338ca"/>
         </Style>
 
+        <!-- Success/Green Buttons -->
+        <Style Selector="Button.success">
+            <Setter Property="Background" Value="#10b981"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.success:pointerover">
+            <Setter Property="Background" Value="#059669"/>
+        </Style>
+
+        <!-- Sync/Indigo Buttons -->
+        <Style Selector="Button.sync">
+            <Setter Property="Background" Value="#6366f1"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.sync:pointerover">
+            <Setter Property="Background" Value="#4f46e5"/>
+        </Style>
+
         <!-- Sidebar Header Style -->
         <Style Selector="TextBlock.section-header">
             <Setter Property="FontSize" Value="12"/>
@@ -66,7 +84,7 @@
         
         <!-- ================= HEADER BAR ================= -->
         <Border Grid.Row="0" Background="#1e293b" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="15,10">
-            <Grid ColumnDefinitions="Auto, *, Auto, Auto">
+            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto">
                 <!-- App Title -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
                     <TextBlock Text="✉️" FontSize="20"/>
@@ -77,8 +95,9 @@
                 <TextBox Grid.Column="1" Margin="20,0" Text="{Binding PstFilePath}" Watermark="Keine PST-Datei geladen" IsReadOnly="True" VerticalAlignment="Center" Background="#0f172a" Foreground="#cbd5e1" BorderThickness="1"/>
                 
                 <!-- Control Buttons -->
-                <Button Grid.Column="2" Content="PST-Datei öffnen" Click="OpenPst_Click" Classes="accent" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <Button Grid.Column="3" Content="Schließen" Command="{Binding ClosePst}" IsEnabled="{Binding PstFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#374151" Foreground="#f9fafb" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="CSV in VCF umwandeln" Click="ConvertCsvToVcf_Click" Classes="success" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button Grid.Column="3" Content="PST-Datei öffnen" Click="OpenPst_Click" Classes="accent" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button Grid.Column="4" Content="Schließen" Command="{Binding ClosePst}" IsEnabled="{Binding PstFilePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#374151" Foreground="#f9fafb" VerticalAlignment="Center"/>
             </Grid>
         </Border>
 
@@ -229,7 +248,7 @@
         <!-- ================= FOOTER BAR ================= -->
         <Border Grid.Row="2" Background="#0f172a" BorderBrush="#1e293b" BorderThickness="0,1,0,0" Padding="15">
             <Grid RowDefinitions="Auto, Auto">
-                <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto, Auto" Margin="0,0,0,10">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto, Auto, Auto" Margin="0,0,0,10">
                     <!-- Target Folder picker -->
                     <TextBlock Grid.Column="0" Text="Export-Ziel:" FontWeight="Bold" Foreground="#cbd5e1" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBox Grid.Column="1" Text="{Binding ExportFolderPath}" Watermark="Bitte Zielverzeichnis auswählen..." IsReadOnly="True" VerticalAlignment="Center" Background="#1e293b" Margin="0,0,10,0"/>
@@ -238,12 +257,16 @@
                     <!-- Format picker -->
                     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="15" Margin="0,0,20,0">
                         <TextBlock Text="Format:" FontWeight="Bold" Foreground="#cbd5e1" VerticalAlignment="Center"/>
-                        <RadioButton Content="EML-Dateien (.eml)" IsChecked="{Binding ExportAsEml}" Foreground="#cbd5e1"/>
+                        <RadioButton Content="EML (.eml - z. B. Windows Live Mail)" IsChecked="{Binding ExportAsEml}" Foreground="#cbd5e1"/>
                         <RadioButton Content="Ordner (HTML + Anhänge)" IsChecked="{Binding !ExportAsEml}" Foreground="#cbd5e1"/>
+                        <CheckBox Content="Ordnerstruktur beibehalten" IsChecked="{Binding KeepFolderStructure}" Foreground="#cbd5e1" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <!-- Export trigger button -->
-                    <Button Grid.Column="4" Content="Ausgewählte exportieren" Command="{Binding ExportSelectedCommand}" Classes="accent" VerticalAlignment="Center" IsEnabled="{Binding !IsLoading}"/>
+                    <Button Grid.Column="4" Content="Ausgewählte exportieren" Command="{Binding ExportSelectedCommand}" Classes="accent" VerticalAlignment="Center" IsEnabled="{Binding !IsLoading}" Margin="0,0,10,0"/>
+                    
+                    <!-- IMAP Sync button -->
+                    <Button Grid.Column="5" Content="In Postfach syncen ☁️" Command="{Binding OpenImapSyncDialogCommand}" Classes="sync" VerticalAlignment="Center" IsEnabled="{Binding !IsLoading}"/>
                 </Grid>
                 
                 <!-- Progress & Log Area -->
@@ -254,6 +277,151 @@
             </Grid>
         </Border>
         
+        <!-- Dialog Overlay for Contact Export Selection -->
+        <Grid Grid.Row="0" Grid.RowSpan="3"
+              Background="#80000000"
+              IsVisible="{Binding ShowContactExportDialog}"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              ZIndex="100">
+            <Border Background="#1e293b"
+                    BorderBrush="#334155"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Width="450"
+                    Padding="25"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BoxShadow="0 10 25 0 #80000000">
+                <StackPanel Spacing="20">
+                    <!-- Title & Icon -->
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="📇" FontSize="28" VerticalAlignment="Center"/>
+                        <TextBlock Text="Kontakte exportieren" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <!-- Message -->
+                    <TextBlock Text="{Binding ContactExportDialogMessage}" 
+                               Foreground="#cbd5e1" 
+                               TextWrapping="Wrap" 
+                               FontSize="14"/>
+                    
+                    <!-- Formats Description/Options -->
+                    <Border Background="#0f172a" CornerRadius="8" Padding="12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Wählen Sie das gewünschte Format:" FontSize="12" FontWeight="SemiBold" Foreground="#94a3b8"/>
+                            <TextBlock Text="• VCF: Erstellt für jeden Kontakt eine einzelne vCard-Datei (ideal für Outlook/Handy)." FontSize="11" Foreground="#94a3b8" TextWrapping="Wrap"/>
+                            <TextBlock Text="• CSV: Speichert alle Kontakte in einer gemeinsamen Tabelle (Excel/Google Kontakte)." FontSize="11" Foreground="#94a3b8" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Action Buttons -->
+                    <Grid ColumnDefinitions="*, *, *">
+                        <Button Grid.Column="0" Content="Als VCF (.vcf)" 
+                                Command="{Binding ExportContactsAsVcfCommand}" 
+                                Classes="accent" 
+                                HorizontalAlignment="Stretch" 
+                                HorizontalContentAlignment="Center"
+                                Margin="0,0,5,0"/>
+                        <Button Grid.Column="1" Content="Als CSV (.csv)" 
+                                Command="{Binding ExportContactsAsCsvCommand}" 
+                                Classes="success" 
+                                HorizontalAlignment="Stretch" 
+                                HorizontalContentAlignment="Center"
+                                Margin="5,0,5,0"/>
+                        <Button Grid.Column="2" Content="Abbrechen" 
+                                Command="{Binding CancelContactExportCommand}" 
+                                Background="#374151" 
+                                Foreground="#f9fafb"
+                                HorizontalAlignment="Stretch" 
+                                HorizontalContentAlignment="Center"
+                                Margin="5,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Dialog Overlay for IMAP Sync Settings -->
+        <Grid Grid.Row="0" Grid.RowSpan="3"
+              Background="#80000000"
+              IsVisible="{Binding ShowImapSyncDialog}"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              ZIndex="100">
+            <Border Background="#1e293b"
+                    BorderBrush="#334155"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Width="480"
+                    Padding="25"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BoxShadow="0 10 25 0 #80000000">
+                <StackPanel Spacing="15">
+                    <!-- Title & Icon -->
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="☁️" FontSize="28" VerticalAlignment="Center"/>
+                        <TextBlock Text="Postfach-Synchronisierung" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Geben Sie die IMAP-Zugangsdaten ein, um die ausgewählten E-Mails direkt in Ihr Postfach zu synchronisieren." 
+                               Foreground="#cbd5e1" 
+                               TextWrapping="Wrap" 
+                               FontSize="13"
+                               Margin="0,0,0,5"/>
+
+                    <!-- Form Fields -->
+                    <Grid RowDefinitions="Auto, Auto, Auto, Auto" ColumnDefinitions="120, *">
+                        <!-- IMAP Server -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="IMAP-Server:" Margin="0,5" Foreground="#94a3b8" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ImapServer}" Margin="0,5" Watermark="z. B. imap.gmx.net"/>
+
+                        <!-- Port -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Port:" Margin="0,5" Foreground="#94a3b8" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ImapPort}" Margin="0,5" Watermark="993"/>
+
+                        <!-- Username / Email -->
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="E-Mail-Adresse:" Margin="0,5" Foreground="#94a3b8" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ImapUser}" Margin="0,5" Watermark="ihre.adresse@gmx.de"/>
+
+                        <!-- Password -->
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Passwort:" Margin="0,5" Foreground="#94a3b8" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ImapPassword}" Margin="0,5" PasswordChar="●" Watermark="Passwort oder App-Passwort"/>
+                    </Grid>
+
+                    <!-- Folder Option Checkbox -->
+                    <CheckBox IsChecked="{Binding UsePstFolderStructure}" 
+                              Content="Ordnerstruktur aus PST spiegeln" 
+                              Foreground="#cbd5e1" 
+                              Margin="0,5,0,5"/>
+                    
+                    <Border Background="#0f172a" CornerRadius="8" Padding="12">
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="Hinweis:" FontSize="11" FontWeight="Bold" Foreground="#818cf8"/>
+                            <TextBlock Text="Bei aktivierter Option werden die Ordnerpfade der PST-Datei auf Ihrem Mailserver automatisch angelegt. Andernfalls werden alle E-Mails im Ordner 'PST-Import' abgelegt." FontSize="10" Foreground="#94a3b8" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Action Buttons -->
+                    <Grid ColumnDefinitions="*, *">
+                        <Button Grid.Column="0" Content="Sync starten" 
+                                Command="{Binding StartImapSyncCommand}" 
+                                Classes="sync" 
+                                HorizontalAlignment="Stretch" 
+                                HorizontalContentAlignment="Center"
+                                Margin="0,0,5,0"/>
+                        <Button Grid.Column="1" Content="Abbrechen" 
+                                Command="{Binding CancelImapSyncCommand}" 
+                                Background="#374151" 
+                                Foreground="#f9fafb"
+                                HorizontalAlignment="Stretch" 
+                                HorizontalContentAlignment="Center"
+                                Margin="5,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+
     </Grid>
 
 </Window>

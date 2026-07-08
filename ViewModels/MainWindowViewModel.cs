@@ -9,6 +9,12 @@ using XstReader;
 
 namespace Outlook_PST_auslesen.ViewModels;
 
+public enum ContactExportFormat
+{
+    Vcf,
+    Csv
+}
+
 public partial class MainWindowViewModel : ViewModelBase
 {
     private XstFile? _xstFile;
@@ -33,6 +39,35 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _searchText = "";
+
+    [ObservableProperty]
+    private bool _showContactExportDialog;
+
+    [ObservableProperty]
+    private string _contactExportDialogMessage = "";
+
+    private System.Collections.Generic.List<MessageViewModel> _selectedItemsToExport = new();
+
+    [ObservableProperty]
+    private bool _showImapSyncDialog;
+
+    [ObservableProperty]
+    private string _imapServer = "";
+
+    [ObservableProperty]
+    private int _imapPort = 993;
+
+    [ObservableProperty]
+    private string _imapUser = "";
+
+    [ObservableProperty]
+    private string _imapPassword = "";
+
+    [ObservableProperty]
+    private bool _usePstFolderStructure = true;
+
+    [ObservableProperty]
+    private bool _keepFolderStructure = true;
 
     private FolderNodeViewModel? _selectedFolder;
     public FolderNodeViewModel? SelectedFolder
@@ -158,7 +193,7 @@ public partial class MainWindowViewModel : ViewModelBase
             
             // Nachrichten laden
             var messages = folder.Messages
-                .Select(m => new MessageViewModel(m))
+                .Select(m => new MessageViewModel(m, folder))
                 .ToList();
 
             foreach (var msg in messages)
@@ -202,7 +237,7 @@ public partial class MainWindowViewModel : ViewModelBase
         
         if (!selected.Any())
         {
-            StatusMessage = "Fehler: Keine E-Mails für den Export ausgewählt.";
+            StatusMessage = "Fehler: Keine Einträge für den Export ausgewählt.";
             return;
         }
 
@@ -212,41 +247,132 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var contacts = selected.Where(m => m.IsContact).ToList();
+        if (contacts.Any())
+        {
+            _selectedItemsToExport = selected;
+            ContactExportDialogMessage = $"Es wurden {contacts.Count} Kontakte in Ihrer Auswahl erkannt. Wie möchten Sie diese exportieren?";
+            ShowContactExportDialog = true;
+        }
+        else
+        {
+            await RunExportAsync(selected, null);
+        }
+    }
+
+    [RelayCommand]
+    public async Task ExportContactsAsVcfAsync()
+    {
+        ShowContactExportDialog = false;
+        var items = _selectedItemsToExport;
+        _selectedItemsToExport = new();
+        await RunExportAsync(items, ContactExportFormat.Vcf);
+    }
+
+    [RelayCommand]
+    public async Task ExportContactsAsCsvAsync()
+    {
+        ShowContactExportDialog = false;
+        var items = _selectedItemsToExport;
+        _selectedItemsToExport = new();
+        await RunExportAsync(items, ContactExportFormat.Csv);
+    }
+
+    [RelayCommand]
+    public void CancelContactExport()
+    {
+        ShowContactExportDialog = false;
+        _selectedItemsToExport.Clear();
+        StatusMessage = "Export abgebrochen.";
+    }
+
+    private async Task RunExportAsync(System.Collections.Generic.List<MessageViewModel> items, ContactExportFormat? contactFormat)
+    {
         IsLoading = true;
         StatusMessage = "Export wird gestartet...";
         Progress = 0;
 
         try
         {
-            int total = selected.Count;
-            int current = 0;
+            var contacts = items.Where(m => m.IsContact).ToList();
+            var emails = items.Where(m => !m.IsContact).ToList();
+
+            int totalSteps = emails.Count;
+            if (contacts.Any())
+            {
+                if (contactFormat == ContactExportFormat.Csv)
+                {
+                    totalSteps += 1;
+                }
+                else
+                {
+                    totalSteps += contacts.Count;
+                }
+            }
+
+            int currentStep = 0;
 
             await Task.Run(async () =>
             {
-                foreach (var msgVm in selected)
+                // 1. Kontakte exportieren
+                if (contacts.Any())
+                {
+                    if (contactFormat == ContactExportFormat.Csv)
+                    {
+                        try
+                        {
+                            await Services.PstExportService.ExportContactsToCsvAsync(contacts, ExportFolderPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                StatusMessage = $"Fehler beim CSV-Export: {ex.Message}";
+                            });
+                        }
+                        currentStep++;
+                        UpdateProgress(currentStep, totalSteps, "Kontakte in CSV-Datei exportiert...");
+                    }
+                    else
+                    {
+                        foreach (var contact in contacts)
+                        {
+                            try
+                            {
+                                await Services.PstExportService.ExportContactAsVcardAsync(contact, ExportFolderPath);
+                            }
+                            catch (Exception ex)
+                            {
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                    StatusMessage = $"Fehler beim VCF-Export von '{contact.Subject}': {ex.Message}";
+                                });
+                            }
+                            currentStep++;
+                            UpdateProgress(currentStep, totalSteps, $"Exportiere Kontakt {currentStep} von {contacts.Count}...");
+                        }
+                    }
+                }
+
+                // 2. E-Mails exportieren
+                foreach (var email in emails)
                 {
                     try
                     {
-                        await Services.PstExportService.ExportMessageAsync(msgVm, ExportFolderPath, ExportAsEml);
+                        await Services.PstExportService.ExportMessageAsync(email, ExportFolderPath, ExportAsEml, KeepFolderStructure);
                     }
                     catch (Exception ex)
                     {
                         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                            StatusMessage = $"Fehler beim Exportieren von '{msgVm.Subject}': {ex.Message}";
+                            StatusMessage = $"Fehler beim Exportieren von '{email.Subject}': {ex.Message}";
                         });
                     }
 
-                    current++;
-                    double progressVal = (double)current / total * 100;
-                    
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                        Progress = progressVal;
-                        StatusMessage = $"Exportiere E-Mail {current} von {total}...";
-                    });
+                    currentStep++;
+                    int emailIndex = currentStep - (contactFormat == ContactExportFormat.Csv ? 1 : contacts.Count);
+                    UpdateProgress(currentStep, totalSteps, $"Exportiere E-Mail {emailIndex} von {emails.Count}...");
                 }
             });
 
-            StatusMessage = $"{total} E-Mails erfolgreich exportiert nach: {ExportFolderPath}";
+            StatusMessage = $"Export erfolgreich abgeschlossen nach: {ExportFolderPath}";
         }
         catch (Exception ex)
         {
@@ -256,6 +382,15 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             IsLoading = false;
         }
+    }
+
+    private void UpdateProgress(int current, int total, string message)
+    {
+        double progressVal = (double)current / total * 100;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+            Progress = progressVal;
+            StatusMessage = message;
+        });
     }
 
     [RelayCommand]
@@ -287,6 +422,79 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = $"Fehler beim Öffnen im Browser: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    public void OpenImapSyncDialog()
+    {
+        var selected = CurrentFolderMessages.Where(m => m.IsSelected && !m.IsContact).ToList();
+        if (!selected.Any())
+        {
+            StatusMessage = "Fehler: Keine E-Mails für die Synchronisierung ausgewählt (Kontakte werden ignoriert).";
+            return;
+        }
+        ShowImapSyncDialog = true;
+    }
+
+    [RelayCommand]
+    public void CancelImapSync()
+    {
+        ShowImapSyncDialog = false;
+        StatusMessage = "Synchronisierung abgebrochen.";
+    }
+
+    [RelayCommand]
+    public async Task StartImapSyncAsync()
+    {
+        var selected = CurrentFolderMessages.Where(m => m.IsSelected && !m.IsContact).ToList();
+        if (!selected.Any())
+        {
+            StatusMessage = "Fehler: Keine E-Mails zum Synchronisieren.";
+            ShowImapSyncDialog = false;
+            return;
+        }
+
+        if (string.IsNullOrEmpty(ImapServer) || string.IsNullOrEmpty(ImapUser) || string.IsNullOrEmpty(ImapPassword))
+        {
+            StatusMessage = "Fehler: Bitte geben Sie Server, E-Mail und Passwort an.";
+            return;
+        }
+
+        ShowImapSyncDialog = false;
+        IsLoading = true;
+        StatusMessage = "Synchronisierung wird gestartet...";
+        Progress = 0;
+
+        try
+        {
+            await Services.ImapSyncService.SyncEmailsAsync(
+                selected, 
+                ImapServer, 
+                ImapPort, 
+                ImapUser, 
+                ImapPassword, 
+                UsePstFolderStructure, 
+                (current, total, message) =>
+                {
+                    double progressVal = (double)current / total * 100;
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        Progress = progressVal;
+                        StatusMessage = message;
+                    });
+                }
+            );
+
+            StatusMessage = $"{selected.Count} E-Mails erfolgreich mit dem Postfach synchronisiert.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Fehler beim Postfach-Sync: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
         }
     }
 

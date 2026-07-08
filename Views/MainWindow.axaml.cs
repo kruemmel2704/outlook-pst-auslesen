@@ -46,6 +46,75 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ConvertCsvToVcf_Click(object? sender, RoutedEventArgs e)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null)
+        {
+            return;
+        }
+
+        // 1. CSV-Datei auswählen
+        var csvFiles = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "CSV-Kontaktdatei auswählen",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("CSV-Datei (*.csv)")
+                {
+                    Patterns = new[] { "*.csv" }
+                }
+            }
+        });
+
+        if (csvFiles.Count == 0)
+        {
+            return;
+        }
+
+        string csvPath = csvFiles[0].Path.LocalPath;
+
+        // 2. Zielverzeichnis für VCFs auswählen
+        var targetFolders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Zielverzeichnis für vCard-Dateien (.vcf) auswählen",
+            AllowMultiple = false
+        });
+
+        if (targetFolders.Count == 0)
+        {
+            return;
+        }
+
+        string targetDir = targetFolders[0].Path.LocalPath;
+
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.IsLoading = true;
+            vm.StatusMessage = "CSV-Datei wird in VCF umgewandelt...";
+            vm.Progress = 0;
+
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    await Services.PstExportService.ConvertCsvToVcfAsync(csvPath, targetDir);
+                });
+
+                vm.StatusMessage = $"Erfolgreich VCF-Dateien im Ordner erstellt: {targetDir}";
+            }
+            catch (Exception ex)
+            {
+                vm.StatusMessage = $"Fehler bei der CSV-Konvertierung: {ex.Message}";
+            }
+            finally
+            {
+                vm.IsLoading = false;
+            }
+        }
+    }
+
     private async void SelectExportFolder_Click(object? sender, RoutedEventArgs e)
     {
         var topLevel = TopLevel.GetTopLevel(this);

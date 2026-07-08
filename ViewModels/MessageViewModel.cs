@@ -13,6 +13,7 @@ public partial class MessageViewModel : ViewModelBase
     private bool _isSelected;
 
     public XstMessage Message { get; }
+    public XstFolder? Folder { get; }
 
     public string Subject => Message.Subject ?? "<Kein Name/Betreff>";
     
@@ -189,9 +190,10 @@ public partial class MessageViewModel : ViewModelBase
         }
     }
 
-    public MessageViewModel(XstMessage message)
+    public MessageViewModel(XstMessage message, XstFolder? folder = null)
     {
         Message = message;
+        Folder = folder;
     }
 
     private static string StripHtml(string html)
